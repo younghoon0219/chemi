@@ -99,7 +99,6 @@ else:
     if drug_name == "커스텀 약물":
         t_half = custom_t_half
 
-# 🖥️ 화면 레이아웃 분할 배치
     col1, col2 = st.columns(2)
 
     with col1:
@@ -114,6 +113,7 @@ else:
             line_width=0,
             fillcolor="rgba(255, 0, 0, 0.08)",
         )
+        # 위 영역 고정 좌표에 글자 도장
         fig_ph.add_annotation(
             x=0.05,
             y=2.5,
@@ -133,6 +133,7 @@ else:
             line_width=0,
             fillcolor="rgba(0, 255, 0, 0.08)",
         )
+        # 소장 영역 고정 좌표에 글자 도장
         fig_ph.add_annotation(
             x=0.05,
             y=6.7,
@@ -168,44 +169,63 @@ else:
         )
         st.plotly_chart(fig_ph, use_container_width=True)
 
+    # 💡 왼쪽 고정폭과 완전히 수평이 맞도록 공백을 정배열한 col2입니다.
     with col2:
         st.write(f"### 💊 약물 시뮬레이션 ({drug_name} 흡수율)")
 
         fig_abs = go.Figure()
 
-        # 💡 [안전장치 1] 데이터가 비어있지 않은지 먼저 체크
         if len(df2) > 0:
-            # 💡 [안전장치 2] 기준점을 3.5로 낮추어 위 영역을 벗어나는 순간을 정확히 잡습니다.
-            boundary_condition = df2["데이터2 - pH"] > 3.5
+            # 1. 위 영역을 벗어나는 시점 (pH > 3.5)
+            to_intestine_cond = df2["데이터2 - pH"] > 3.5
+            change_time1 = (
+                df2.loc[to_intestine_cond, "시간(초)"].iloc[0]
+                if to_intestine_cond.any()
+                else df2["시간(초)"].max() / 2
+            )
 
-            if boundary_condition.any():
-                change_time = df2.loc[boundary_condition, "시간(초)"].iloc[0]
-            else:
-                change_time = df2["시간(초)"].max() / 2
+            # 2. 실제 소장 pH 상한선(7.4)을 초과하여 강염기로 진입하는 시점
+            to_base_cond = df2["데이터2 - pH"] > 7.4
+            change_time2 = (
+                df2.loc[to_base_cond, "시간(초)"].iloc[0]
+                if to_base_cond.any()
+                else df2["시간(초)"].max()
+            )
+
             max_time = df2["시간(초)"].max()
         else:
-            change_time = 180
-            max_time = 360
+            change_time1, change_time2, max_time = 120, 240, 360
 
-        # 💡 [안전장치 3] 혹시 모를 에러 방지를 위해 값이 유효할 때만 vrect를 그립니다.
-        if change_time > 0:
-            # 위 영역 흡수 환경 (연한 빨강)
+        # 🟥 1구간: 위 흡수 환경 (0초 ~ pH 3.5 도달 전)
+        if change_time1 > 0:
             fig_abs.add_vrect(
                 x0=0,
-                x1=change_time,
+                x1=change_time1,
                 line_width=0,
                 fillcolor="rgba(255, 0, 0, 0.04)",
                 annotation_text="위 흡수 환경",
                 annotation_position="top left",
             )
-        if max_time > change_time:
-            # 소장 영역 흡수 환경 (연한 녹색)
+
+        # 🟩 2구간: 실제 소장 흡수 환경 (pH 3.5 초과 ~ pH 7.4 이하 공존 구간)
+        if change_time2 > change_time1:
             fig_abs.add_vrect(
-                x0=change_time,
-                x1=max_time,
+                x0=change_time1,
+                x1=change_time2,
                 line_width=0,
                 fillcolor="rgba(0, 255, 0, 0.04)",
                 annotation_text="소장 흡수 환경",
+                annotation_position="top left",
+            )
+
+        # ⬜ 3구간: 실험적 염기 과량 구간 (pH 7.4 초과 ~ 실험 종료)
+        if max_time > change_time2:
+            fig_abs.add_vrect(
+                x0=change_time2,
+                x1=max_time,
+                line_width=0,
+                fillcolor="rgba(128, 128, 128, 0.05)",
+                annotation_text="염기 과량 구간 (pH > 7.4)",
                 annotation_position="top left",
             )
 
