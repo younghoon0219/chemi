@@ -3,7 +3,7 @@ import pandas as pd
 import streamlit as st
 
 # 웹앱 레이아웃 설정
-st.set_page_config(page_title="화학x약학 시뮬레이터", layout="wide")
+st.set_page_config(page_title="pH에 따른 약물 이온화도 및 체내 흡수율 시뮬레이터", layout="wide")
 
 st.title("🧪 pH에 따른 약물 이온화도 및 체내 흡수율 시뮬레이터")
 st.markdown(
