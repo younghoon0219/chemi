@@ -77,15 +77,210 @@ else:
     # 🖥️ 화면 레이아웃 분할 배치
     col1, col2 = st.columns(2)
 
-    with col1:
-        st.subheader("📊 실험 데이터 (시간에 따른 pH 변화)")
-        st.line_chart(ph_chart)
+    import numpy as np
+    import plotly.graph_objects as go
 
-   # 💡 [교정 포인트] 그래프를 그리기 직전에, 사이드바에서 선택한 약물 이름으로 drug_name을 다시 확실하게 동기화합니다.
+# 💡 [해결] 커스텀 반감기를 직접 입력받는 슬라이더 변수를 먼저 선언해 줍니다.
+    # (최소 1시간 ~ 최대 50시간, 기본값 4.0시간)
+    custom_t_half = st.sidebar.slider("⚙️ 커스텀 약물 반감기 설정 (시간)", 1.0, 50.0, 4.0, 0.5)
+
+    # [약물별 실제 반감기 데이터 설정]
+    half_life_dict = {
+        "Aspirin (아스피린)": 3.0,
+        "Acetaminophen (타이레놀 성분)": 2.0,
+        "Diazepam (신경안정제)": 40.0,
+        "Amphetamine (각성제 성분)": 10.0,
+        "커스텀 약물": 4.0,
+    }
+    
+    t_half = half_life_dict.get(drug_name, 4.0)
+
+    # 이제 컴퓨터가 custom_t_half를 알아보고 정상 작동합니다!
+    if drug_name == "커스텀 약물":
+        t_half = custom_t_half
+
+# 🖥️ 화면 레이아웃 분할 배치
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.write("### 📊 시간에 따른 pH 변화 및 소화기관 영역")
+
+        fig_ph = go.Figure()
+
+        # [왼쪽] pH 수치 기준 가로 음영 배치
+        fig_ph.add_hrect(
+            y0=1.5,
+            y1=3.5,
+            line_width=0,
+            fillcolor="rgba(255, 0, 0, 0.08)",
+        )
+        fig_ph.add_annotation(
+            x=0.05,
+            y=2.5,
+            xref="paper",
+            yref="y",
+            text="😋 위 (pH 1.5-3.5)",
+            showarrow=False,
+            font=dict(
+                color="rgba(255, 0, 0, 0.8)", size=12, family="Malgun Gothic"
+            ),
+            align="left",
+        )
+
+        fig_ph.add_hrect(
+            y0=6.0,
+            y1=7.4,
+            line_width=0,
+            fillcolor="rgba(0, 255, 0, 0.08)",
+        )
+        fig_ph.add_annotation(
+            x=0.05,
+            y=6.7,
+            xref="paper",
+            yref="y",
+            text="🥦 소장 (pH 6.0-7.4)",
+            showarrow=False,
+            font=dict(
+                color="rgba(0, 150, 0, 0.8)", size=12, family="Malgun Gothic"
+            ),
+            align="left",
+        )
+
+        # pH 측정 데이터 선
+        fig_ph.add_trace(
+            go.Scatter(
+                x=df2["시간(초)"],
+                y=df2["데이터2 - pH"],
+                mode="lines",
+                name="측정 pH",
+                line=dict(color="#4B0082", width=3),
+                hovertemplate="⏱️ <b>시간</b>: %{x}초<br>🧪 <b>수치</b>: pH %{y}<extra></extra>",
+            )
+        )
+
+        fig_ph.update_layout(
+            xaxis_title="시간 (초)",
+            yaxis_title="pH 수치",
+            yaxis=dict(range=[0, 14]),
+            margin=dict(l=20, r=20, t=20, b=20),
+            height=380,
+            hovermode="x unified",
+        )
+        st.plotly_chart(fig_ph, use_container_width=True)
+
     with col2:
-        # 💡 st.subheader 대신 st.write와 마크다운(###)을 쓰면 레이아웃에 갇히지 않고 실시간으로 바뀝니다!
         st.write(f"### 💊 약물 시뮬레이션 ({drug_name} 흡수율)")
-        st.line_chart(abs_chart)
+
+        fig_abs = go.Figure()
+
+        # 💡 [안전장치 1] 데이터가 비어있지 않은지 먼저 체크
+        if len(df2) > 0:
+            # 💡 [안전장치 2] 기준점을 3.5로 낮추어 위 영역을 벗어나는 순간을 정확히 잡습니다.
+            boundary_condition = df2["데이터2 - pH"] > 3.5
+
+            if boundary_condition.any():
+                change_time = df2.loc[boundary_condition, "시간(초)"].iloc[0]
+            else:
+                change_time = df2["시간(초)"].max() / 2
+            max_time = df2["시간(초)"].max()
+        else:
+            change_time = 180
+            max_time = 360
+
+        # 💡 [안전장치 3] 혹시 모를 에러 방지를 위해 값이 유효할 때만 vrect를 그립니다.
+        if change_time > 0:
+            # 위 영역 흡수 환경 (연한 빨강)
+            fig_abs.add_vrect(
+                x0=0,
+                x1=change_time,
+                line_width=0,
+                fillcolor="rgba(255, 0, 0, 0.04)",
+                annotation_text="위 흡수 환경",
+                annotation_position="top left",
+            )
+        if max_time > change_time:
+            # 소장 영역 흡수 환경 (연한 녹색)
+            fig_abs.add_vrect(
+                x0=change_time,
+                x1=max_time,
+                line_width=0,
+                fillcolor="rgba(0, 255, 0, 0.04)",
+                annotation_text="소장 흡수 환경",
+                annotation_position="top left",
+            )
+
+        # 약물 흡수율 데이터 선
+        fig_abs.add_trace(
+            go.Scatter(
+                x=df2["시간(초)"],
+                y=df2["데이터2 - 약물 흡수율(%)"],
+                mode="lines",
+                name="비이온화 비율(흡수율)",
+                line=dict(color="#FF4B4B", width=3),
+                hovertemplate="⏱️ <b>시간</b>: %{x}초<br>🩸 <b>흡수율</b>: %{y:.1f}%<extra></extra>",
+            )
+        )
+
+        fig_abs.update_layout(
+            xaxis_title="시간 (초)",
+            yaxis_title="흡수율 (%)",
+            yaxis=dict(range=[0, 105]),
+            margin=dict(l=20, r=20, t=30, b=20),
+            height=380,
+            hovermode="x unified",
+        )
+        st.plotly_chart(fig_abs, use_container_width=True)
+
+   # ⏳ [기능 2] 하단 반감기 차트 구역 (공백 4칸으로 시작 라인을 맞췄습니다)
+    st.markdown("---")
+    st.write(
+        f"### ⏳ 의학·수학 융합 시뮬레이션: 시간 경과에 따른 체내 {drug_name} 잔류 농도 추이"
+    )
+    st.caption(
+        f"지수함수 모델 $C(t) = C_0 \\times e^{{-k_e t}}$ 및 반감기($t_{{1/2}}$ = {t_half}시간)를 적용한 약동학적 농도 감소 시뮬레이션입니다."
+    )
+
+    max_sec = df2["시간(초)"].max() if len(df2) > 0 else 360
+    time_hours = (df2["시간(초)"] / max_sec) * (t_half * 3)
+
+    avg_absorption = (
+        df2["데이터2 - 약물 흡수율(%)"].mean() if len(df2) > 0 else 50.0
+    )
+    c_0 = float(avg_absorption)
+
+    k_elim = np.log(2) / t_half
+    remaining_concentration = c_0 * np.exp(-k_elim * time_hours)
+
+    fig_decay = go.Figure()
+
+    # 💡 왼쪽 공백을 8칸에서 8칸 미만인 4칸 정배율로 정렬한 add_trace입니다.
+    fig_decay.add_trace(
+        go.Scatter(
+            x=time_hours,
+            y=remaining_concentration,
+            mode="lines",
+            name="체내 약물 농도",
+            line=dict(color="#1f77b4", width=3, dash="dash"),
+            hovertemplate="⏳ <b>경과 시간</b>: %{x:.1f}시간<br>📉 <b>잔류 농도</b>: %{y:.1f}%<extra></extra>",
+        )
+    )
+    fig_decay.add_vline(
+        x=t_half,
+        line_width=1.5,
+        line_dash="dot",
+        line_color="orange",
+        annotation_text="1차 반감기",
+    )
+
+    fig_decay.update_layout(
+        xaxis_title="시간 (Hours)",
+        yaxis_title="체내 약물 농도 (Relative %)",
+        yaxis=dict(range=[0, 105]),
+        margin=dict(l=20, r=20, t=30, b=20),
+        height=300,
+        hovermode="x unified",
+    )
+    st.plotly_chart(fig_decay, use_container_width=True)
 
     # 하단 상태 요약 창 (기존 들여쓰기 공백 4칸 유지)
     st.subheader("📝 실시간 분석 요약")
