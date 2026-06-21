@@ -5,7 +5,7 @@ import streamlit as st
 # 웹앱 레이아웃 설정
 st.set_page_config(page_title="화학x약학 시뮬레이터", layout="wide")
 
-st.title("🧪 화학 × 약학 융합 데이터 시뮬레이터")
+st.title("🧪 pH에 따른 약물 이온화도 및 체내 흡수율 시뮬레이터")
 st.markdown(
     "실험 데이터(pH)에 따른 **약물의 체내 흡수율(비이온화 비율)**을 실시간으로 시뮬레이션합니다."
 )
